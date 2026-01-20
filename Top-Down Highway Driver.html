@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Top-Down Highway Driver (Canvas)</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #0b0f14;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap { position: relative; }
+    canvas {
+      background: #11161d;
+      border: 2px solid #233044;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.45);
+    }
+    .hud {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      color: #e9eef8;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+    }
+    .hud-right {
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
+    .hud-btn {
+      cursor: pointer;
+      background: rgba(44, 108, 255, 0.9);
+      border: 1px solid rgba(68, 95, 140, 0.6);
+      color: #e9eef8;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.15s ease;
+    }
+    .hud-btn:hover {
+      background: rgba(44, 108, 255, 1);
+      box-shadow: 0 4px 12px rgba(44, 108, 255, 0.3);
+    }
+    .hud-btn:active {
+      transform: translateY(1px);
+    }
+    .hud .pill {
+      pointer-events: none;
+      background: rgba(13, 18, 26, 0.72);
+      border: 1px solid rgba(68, 95, 140, 0.35);
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 14px;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      place-items: center;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(2px);
+      border-radius: 12px;
+    }
+    .panel {
+      width: min(320px, 90%);
+      background: rgba(12, 16, 24, 0.92);
+      border: 1px solid rgba(68, 95, 140, 0.5);
+      border-radius: 14px;
+      padding: 18px 16px;
+      text-align: center;
+      color: #e9eef8;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .panel h2 { margin: 6px 0 10px; font-size: 22px; }
+    .panel p { margin: 6px 0 14px; opacity: 0.9; }
+    .panel button {
+      cursor: pointer;
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-weight: 700;
+      background: #2c6cff;
+      color: white;
+      width: 100%;
+    }
+    .panel button:active { transform: translateY(1px); }
+    .hint {
+      margin-top: 10px;
+      font-size: 12px;
+      opacity: 0.75;
+      line-height: 1.4;
+    }
+    .highscores-list {
+      text-align: left;
+      margin: 12px 0;
+      font-size: 13px;
+      font-family: monospace;
+    }
+    .highscores-list div {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      color: #a0aac0;
+    }
+    .highscores-list div .rank {
+      width: 20px;
+      color: #7a84a0;
+    }
+    .highscores-list div .score {
+      color: #2c6cff;
+      font-weight: 600;
+    }
+    .name-input {
+      width: 100%;
+      padding: 8px 12px;
+      margin: 12px 0;
+      background: rgba(50, 60, 80, 0.6);
+      border: 1px solid rgba(68, 95, 140, 0.5);
+      color: #e9eef8;
+      font-size: 18px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: bold;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-family: monospace;
+      box-sizing: border-box;
+    }
+    .name-input::placeholder {
+      color: rgba(169, 174, 184, 0.5);
+    }
+    .name-input:focus {
+      outline: none;
+      border-color: rgba(44, 108, 255, 0.7);
+      background: rgba(50, 60, 80, 0.8);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <canvas id="game" width="420" height="720"></canvas>
+
+    <div class="hud">
+      <div class="pill" id="scorePill">Distance: 0</div>
+      <div style="display: flex; gap: 20px; align-items: center;">
+        <div class="hud-right">
+          <button class="hud-btn" id="homeBtn">Home</button>
+          <button class="hud-btn" id="pauseBtn">Pause</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="panel">
+        <h2 id="overlayTitle">Game Over</h2>
+        <p id="overlayText">Distance: 0</p>
+        <button id="restartBtn">Restart</button>
+        <button id="quitFromGameOverBtn" style="margin-top: 8px; background: #666;">Quit to Home</button>
+        <div class="hint">
+          Tip: Switch lanes quickly to avoid traffic. Difficulty increases over time.
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="pauseOverlay">
+      <div class="panel">
+        <h2>Game Paused</h2>
+        <p id="pauseText" style="font-size: 14px; opacity: 0.85; margin-bottom: 16px;">Distance: 0</p>
+        <button id="resumeBtn">Resume</button>
+        <button id="pauseRestartBtn" style="margin-top: 8px; background: #666;">Restart</button>
+        <button id="quitBtn" style="margin-top: 8px; background: #d32f2f;">Quit to Home</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="homeOverlay">
+      <div class="panel">
+        <h2>Top-Down Highway Driver</h2>
+        <p style="font-size: 14px; margin: 12px 0 20px;">Avoid traffic and drive as far as you can!</p>
+        <button id="startBtn">Start Game</button>
+        <button id="highscoreBtn" style="margin-top: 8px; background: #7c3aed;">High Scores</button>
+        <div id="highscoresContainer" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(68, 95, 140, 0.3);">
+          <p style="font-size: 12px; margin: 0 0 8px 0; opacity: 0.7;">HIGH SCORES</p>
+          <div class="highscores-list" id="highscoresList"></div>
+        </div>
+        <div class="hint">
+          Use ↑ ↓ ← → or W A S D to switch lanes. Difficulty increases over time.
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="highscoresViewOverlay">
+      <div class="panel" style="width: min(400px, 90%); max-height: 70vh; overflow-y: auto;">
+        <h2>High Scores</h2>
+        <div class="highscores-list" id="highscoresViewList" style="margin: 20px 0;"></div>
+        <button id="closeHighscoresBtn" style="margin-top: 12px;">Back</button>
+        <button id="clearHighscoresBtn" style="margin-top: 8px; background: #d32f2f;">Clear All</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="nameEntryOverlay">
+      <div class="panel">
+        <h2>New High Score!</h2>
+        <p id="newScoreText" style="font-size: 14px; margin: 12px 0;">Distance: 0</p>
+        <p style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;">Enter your name (3 characters)</p>
+        <input type="text" id="playerName" class="name-input" placeholder="AAA" maxlength="3" autocomplete="off">
+        <button id="submitNameBtn" style="margin-top: 8px;">Submit</button>
+        <button id="skipNameBtn" style="margin-top: 8px; background: #666;">Skip</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * 2D Top-Down Highway Driving Game
+     * - Lane-based movement (smooth transition)
+     * - Obstacles spawn in random lanes
+     * - Collision -> Game Over overlay + Restart
+     * - Score based on distance traveled (px)
+     * - Moving dashed lane lines
+     */
+
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    const scorePill = document.getElementById("scorePill");
+    const overlay = document.getElementById("overlay");
+    const overlayText = document.getElementById("overlayText");
+    const restartBtn = document.getElementById("restartBtn");
+    const quitFromGameOverBtn = document.getElementById("quitFromGameOverBtn");
+    
+    const pauseOverlay = document.getElementById("pauseOverlay");
+    const pauseText = document.getElementById("pauseText");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const resumeBtn = document.getElementById("resumeBtn");
+    const pauseRestartBtn = document.getElementById("pauseRestartBtn");
+    const quitBtn = document.getElementById("quitBtn");
+    
+    const homeOverlay = document.getElementById("homeOverlay");
+    const homeBtn = document.getElementById("homeBtn");
+    const startBtn = document.getElementById("startBtn");
+
+    const nameEntryOverlay = document.getElementById("nameEntryOverlay");
+    const playerNameInput = document.getElementById("playerName");
+    const submitNameBtn = document.getElementById("submitNameBtn");
+    const skipNameBtn = document.getElementById("skipNameBtn");
+    const newScoreText = document.getElementById("newScoreText");
+
+    const highscoresViewOverlay = document.getElementById("highscoresViewOverlay");
+    const highscoreBtn = document.getElementById("highscoreBtn");
+    const closeHighscoresBtn = document.getElementById("closeHighscoresBtn");
+    const clearHighscoresBtn = document.getElementById("clearHighscoresBtn");
+    const highscoresViewList = document.getElementById("highscoresViewList");
+
+    // ======= Game Config =======
+    const CONFIG = {
+      lanes: 4,                 // change to 3 or 4 as you like
+      roadPadding: 28,          // padding from canvas edge
+      player: {
+        w: 36,
+        h: 70,
+        color: "#2c6cff",
+        yOffsetFromBottom: 120,
+        laneSwitchSpeed: 16     // higher = snappier smooth transition
+      },
+      enemy: {
+        w: 36,
+        h: 70,
+        color: "#ff3b3b",
+        minSpeed: 220,
+        maxSpeed: 360
+      },
+      spawn: {
+        startEvery: 0.85,       // seconds (will shrink to increase difficulty)
+        minEvery: 0.38,
+        difficultyRamp: 0.008   // shrink spawn interval per second
+      },
+      road: {
+        background: "#0f141b",
+        border: "#2b3b55",
+        dashColor: "rgba(255,255,255,0.8)",
+        dashWidth: 6,
+        dashHeight: 36,
+        dashGap: 24
+      }
+    };
+
+    // ======= Derived Layout =======
+    function roadRect() {
+      return {
+        x: CONFIG.roadPadding,
+        y: 0,
+        w: canvas.width - CONFIG.roadPadding * 2,
+        h: canvas.height
+      };
+    }
+
+    function laneWidth() {
+      return roadRect().w / CONFIG.lanes;
+    }
+
+    function laneCenterX(laneIndex) {
+      const r = roadRect();
+      const lw = laneWidth();
+      return r.x + laneIndex * lw + lw / 2;
+    }
+
+    // ======= Utilities =======
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+    function rand(min, max) { return Math.random() * (max - min) + min; }
+    function randInt(min, maxInclusive) {
+      return Math.floor(Math.random() * (maxInclusive - min + 1)) + min;
+    }
+
+    function rectsOverlap(a, b) {
+      return (
+        a.x < b.x + b.w &&
+        a.x + a.w > b.x &&
+        a.y < b.y + b.h &&
+        a.y + a.h > b.y
+      );
+    }
+
+    // ======= Game State =======
+    let running = true;
+    let isPaused = false;
+    let gameStarted = false;
+    let lastTime = performance.now();
+    let enemies = [];
+    let distance = 0;
+
+    let spawnTimer = 0;
+    let spawnEvery = CONFIG.spawn.startEvery;
+
+    // Dashed road animation offset
+    let dashOffset = 0;
+
+    // ======= High Scores System =======
+    const HIGHSCORES_KEY = "highwayrace_scores";
+    const MAX_HIGHSCORES = 10;
+
+    function getHighScores() {
+      const stored = localStorage.getItem(HIGHSCORES_KEY);
+      return stored ? JSON.parse(stored) : [];
+    }
+
+    function saveHighScore(name, score) {
+      const scores = getHighScores();
+      scores.push({ name: name.toUpperCase(), score: Math.floor(score) });
+      scores.sort((a, b) => b.score - a.score);
+      // Keep only top 10
+      scores.splice(MAX_HIGHSCORES);
+      localStorage.setItem(HIGHSCORES_KEY, JSON.stringify(scores));
+      return scores;
+    }
+
+    function isHighScore(score) {
+      const scores = getHighScores();
+      if (scores.length < MAX_HIGHSCORES) return true;
+      return Math.floor(score) > scores[scores.length - 1].score;
+    }
+
+    function displayHighScores() {
+      const scores = getHighScores();
+      const container = document.getElementById("highscoresContainer");
+      const list = document.getElementById("highscoresList");
+
+      if (scores.length === 0) {
+        container.style.display = "none";
+        return;
+      }
+
+      container.style.display = "block";
+      list.innerHTML = scores.slice(0, 5).map((s, i) => 
+        `<div><span class="rank">${i + 1}.</span><span>${s.name}</span><span class="score">${s.score}</span></div>`
+      ).join("");
+    }
+
+    function displayAllHighScores() {
+      const scores = getHighScores();
+      
+      if (scores.length === 0) {
+        highscoresViewList.innerHTML = "<div style='text-align: center; opacity: 0.7; padding: 20px;'>No high scores yet. Play to set a record!</div>";
+      } else {
+        highscoresViewList.innerHTML = scores.map((s, i) => 
+          `<div><span class="rank">${i + 1}.</span><span>${s.name}</span><span class="score">${s.score}</span></div>`
+        ).join("");
+      }
+      
+      highscoresViewOverlay.style.display = "grid";
+    }
+
+    function clearAllHighScores() {
+      if (confirm("Are you sure you want to delete all high scores? This cannot be undone.")) {
+        localStorage.removeItem(HIGHSCORES_KEY);
+        displayAllHighScores();
+        displayHighScores();
+      }
+    }
+
+    // ======= Player =======
+    const player = {
+      lane: Math.floor(CONFIG.lanes / 2),       // current target lane
+      x: 0,                                     // actual x (smooth lerp)
+      y: canvas.height - CONFIG.player.yOffsetFromBottom,
+      w: CONFIG.player.w,
+      h: CONFIG.player.h,
+      color: CONFIG.player.color,
+      velocityY: 0                              // for forward/backward movement
+    };
+
+    function resetGame() {
+      running = true;
+      isPaused = false;
+      gameStarted = true;
+      enemies = [];
+      distance = 0;
+      spawnTimer = 0;
+      spawnEvery = CONFIG.spawn.startEvery;
+      dashOffset = 0;
+
+      player.lane = Math.floor(CONFIG.lanes / 2);
+      player.x = laneCenterX(player.lane) - player.w / 2;
+      player.y = canvas.height - CONFIG.player.yOffsetFromBottom;
+      player.velocityY = 0;
+
+      overlay.style.display = "none";
+      pauseOverlay.style.display = "none";
+      homeOverlay.style.display = "none";
+      pauseBtn.textContent = "Pause";
+      lastTime = performance.now();
+    }
+
+    function showHome() {
+      running = false;
+      isPaused = false;
+      gameStarted = false;
+      enemies = [];
+      distance = 0;
+      spawnTimer = 0;
+      spawnEvery = CONFIG.spawn.startEvery;
+      dashOffset = 0;
+
+      overlay.style.display = "none";
+      pauseOverlay.style.display = "none";
+      nameEntryOverlay.style.display = "none";
+      highscoresViewOverlay.style.display = "none";
+      homeOverlay.style.display = "grid";
+      displayHighScores();
+    }
+
+    function togglePause() {
+      if (!gameStarted || !running) return;
+
+      isPaused = !isPaused;
+      if (isPaused) {
+        pauseText.textContent = `Distance: ${Math.floor(distance)}`;
+        pauseOverlay.style.display = "grid";
+        pauseBtn.textContent = "Paused";
+      } else {
+        pauseOverlay.style.display = "none";
+        pauseBtn.textContent = "Pause";
+        lastTime = performance.now(); // Reset timer to avoid jump
+      }
+    }
+
+    function gameOver() {
+      running = false;
+      overlayText.textContent = `Distance: ${Math.floor(distance)}`;
+      
+      // Check if it's a high score
+      if (isHighScore(distance)) {
+        newScoreText.textContent = `Distance: ${Math.floor(distance)}`;
+        overlay.style.display = "none";
+        nameEntryOverlay.style.display = "grid";
+        playerNameInput.focus();
+      } else {
+        overlay.style.display = "grid";
+      }
+    }
+
+    // ======= Input =======
+    const keys = new Set();
+
+    window.addEventListener("keydown", (e) => {
+      const k = e.key.toLowerCase();
+
+      // prevent arrow keys from scrolling page in some browsers
+      if (["arrowleft", "arrowright"].includes(k)) e.preventDefault();
+
+      keys.add(k);
+
+      // Pause toggle with 'p' or 'Escape'
+      if ((k === "p" || k === "escape") && gameStarted && running) {
+        togglePause();
+        return;
+      }
+
+      if (!running || isPaused) return;
+
+      if (k === "arrowleft" || k === "a") {
+        player.lane = clamp(player.lane - 1, 0, CONFIG.lanes - 1);
+      } else if (k === "arrowright" || k === "d") {
+        player.lane = clamp(player.lane + 1, 0, CONFIG.lanes - 1);
+      } else if (k === "arrowup" || k === "w") {
+        player.velocityY = -200; // Move forward (up)
+      } else if (k === "arrowdown" || k === "s") {
+        player.velocityY = 150; // Move backward (down)
+      }
+    });
+
+    window.addEventListener("keyup", (e) => {
+      keys.delete(e.key.toLowerCase());
+      // Stop forward/backward movement on key release
+      const k = e.key.toLowerCase();
+      if (k === "arrowup" || k === "w" || k === "arrowdown" || k === "s") {
+        player.velocityY = 0;
+      }
+    });
+
+    restartBtn.addEventListener("click", () => resetGame());
+    quitFromGameOverBtn.addEventListener("click", () => showHome());
+
+    // Name entry listeners
+    submitNameBtn.addEventListener("click", () => {
+      const name = playerNameInput.value.trim() || "AAA";
+      saveHighScore(name, distance);
+      nameEntryOverlay.style.display = "none";
+      overlayText.textContent = `Distance: ${Math.floor(distance)}`;
+      overlay.style.display = "grid";
+      displayHighScores();
+    });
+
+    skipNameBtn.addEventListener("click", () => {
+      nameEntryOverlay.style.display = "none";
+      overlayText.textContent = `Distance: ${Math.floor(distance)}`;
+      overlay.style.display = "grid";
+    });
+
+    // Allow Enter key to submit name
+    playerNameInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        submitNameBtn.click();
+      }
+    });
+
+    // High scores button listeners
+    highscoreBtn.addEventListener("click", () => displayAllHighScores());
+    closeHighscoresBtn.addEventListener("click", () => {
+      highscoresViewOverlay.style.display = "none";
+    });
+    clearHighscoresBtn.addEventListener("click", () => clearAllHighScores());
+
+    // Pause menu listeners
+    pauseBtn.addEventListener("click", () => togglePause());
+    resumeBtn.addEventListener("click", () => togglePause());
+    pauseRestartBtn.addEventListener("click", () => resetGame());
+    quitBtn.addEventListener("click", () => showHome());
+
+    // Home screen listeners
+    homeBtn.addEventListener("click", () => showHome());
+    startBtn.addEventListener("click", () => resetGame());
+
+    // Display high scores on initial load
+    displayHighScores();
+
+    // ======= Enemy Spawning =======
+    function spawnEnemy() {
+      const lane = randInt(0, CONFIG.lanes - 1);
+      const x = laneCenterX(lane) - CONFIG.enemy.w / 2;
+      const y = -CONFIG.enemy.h - 10;
+      const speed = rand(CONFIG.enemy.minSpeed, CONFIG.enemy.maxSpeed);
+
+      enemies.push({
+        x, y,
+        w: CONFIG.enemy.w,
+        h: CONFIG.enemy.h,
+        lane,
+        speed,
+        color: CONFIG.enemy.color
+      });
+    }
+
+    // ======= Drawing =======
+    function drawRoad() {
+      const r = roadRect();
+
+      // Road background
+      ctx.fillStyle = CONFIG.road.background;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+
+      // Road borders
+      ctx.strokeStyle = CONFIG.road.border;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+      // Lane dividers (dashed)
+      const lw = laneWidth();
+      ctx.fillStyle = CONFIG.road.dashColor;
+
+      for (let i = 1; i < CONFIG.lanes; i++) {
+        const lineX = r.x + i * lw;
+        // Dash vertical pattern
+        const dashH = CONFIG.road.dashHeight;
+        const gap = CONFIG.road.dashGap;
+
+        // start offset so it animates
+        let y = -dashH + (dashOffset % (dashH + gap));
+
+        while (y < canvas.height) {
+          ctx.fillRect(lineX - CONFIG.road.dashWidth / 2, y, CONFIG.road.dashWidth, dashH);
+          y += dashH + gap;
+        }
+      }
+    }
+
+    function drawCar(car) {
+      // body
+      ctx.fillStyle = car.color;
+      ctx.fillRect(car.x, car.y, car.w, car.h);
+
+      // simple "windshield" highlight
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.fillRect(car.x + 8, car.y + 10, car.w - 16, 20);
+
+      // simple "taillights" / "headlights" blocks
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      ctx.fillRect(car.x + 6, car.y + car.h - 14, 10, 8);
+      ctx.fillRect(car.x + car.w - 16, car.y + car.h - 14, 10, 8);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      drawRoad();
+
+      // Enemies
+      for (const e of enemies) drawCar(e);
+
+      // Player
+      drawCar(player);
+    }
+
+    // ======= Update Loop =======
+    function update(dt) {
+      // Increase difficulty slowly: spawn more often
+      spawnEvery = Math.max(CONFIG.spawn.minEvery, spawnEvery - CONFIG.spawn.difficultyRamp * dt);
+
+      // Score / distance: treat as distance traveled along road
+      // You can tie this to "world speed". Here it scales with time for simplicity:
+      const worldSpeed = 380; // px/sec baseline "road speed"
+      distance += worldSpeed * dt;
+      scorePill.textContent = `Distance: ${Math.floor(distance)}`;
+
+      // Animate dashed lane lines
+      dashOffset += worldSpeed * dt;
+
+      // Smooth lane switching: move player.x toward target lane center
+      const targetX = laneCenterX(player.lane) - player.w / 2;
+      const dx = targetX - player.x;
+
+      // Exponential smoothing-ish approach
+      player.x += dx * (1 - Math.pow(0.001, dt * CONFIG.player.laneSwitchSpeed));
+
+      // Forward/backward movement
+      player.y += player.velocityY * dt;
+      // Keep player within canvas bounds
+      const rRect = roadRect();
+      player.y = clamp(player.y, rRect.y, rRect.y + rRect.h - player.h);
+
+      // Spawning enemies
+      spawnTimer += dt;
+      if (spawnTimer >= spawnEvery) {
+        spawnTimer = 0;
+        spawnEnemy();
+      }
+
+      // Move enemies down
+      for (const e of enemies) {
+        // Give enemies a slight relative motion against the "world"
+        e.y += (e.speed - 120) * dt;
+      }
+
+      // Remove off-screen enemies
+      enemies = enemies.filter(e => e.y < canvas.height + e.h + 40);
+
+      // Collision detection with collision margin
+      const collisionMargin = 8; // Add buffer space around cars
+      const playerRect = { 
+        x: player.x + collisionMargin, 
+        y: player.y + collisionMargin, 
+        w: player.w - collisionMargin * 2, 
+        h: player.h - collisionMargin * 2 
+      };
+      for (const e of enemies) {
+        const enemyRect = { 
+          x: e.x + collisionMargin, 
+          y: e.y + collisionMargin, 
+          w: e.w - collisionMargin * 2, 
+          h: e.h - collisionMargin * 2 
+        };
+        if (rectsOverlap(playerRect, enemyRect)) {
+          gameOver();
+          break;
+        }
+      }
+    }
+
+    function loop(now) {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      if (running && !isPaused) {
+        update(dt);
+      }
+
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    // Init - Show home screen
+    showHome();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
